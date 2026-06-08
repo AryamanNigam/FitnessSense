@@ -1,5 +1,10 @@
 .claude/
 
+docs/session_state.md
+docs/roadmap.md
+docs/review_notes.md
+docs/decisions.md
+
 .env
 .env.local
 
