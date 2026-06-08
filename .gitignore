@@ -1,0 +1,16 @@
+.claude/
+
+.env
+.env.local
+
+venv/
+__pycache__/
+*.pyc
+
+node_modules/
+
+backend/chroma_db/
+
+backend/data/
+
+.DS_Store
