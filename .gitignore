@@ -9,13 +9,14 @@ docs/decisions.md
 .env.local
 
 venv/
+backend/.venv/
 __pycache__/
 *.pyc
 
 node_modules/
+frontend/dist/
 
 backend/chroma_db/
-
 backend/data/
 
 .DS_Store
