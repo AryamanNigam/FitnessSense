@@ -48,7 +48,8 @@ export default function Onboarding() {
       setProfile(res.data);
       navigate("/dashboard");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to save profile");
+      const detail = (err as any)?.response?.data?.detail;
+      setError(detail ?? (err instanceof Error ? err.message : "Failed to save profile"));
     } finally {
       setLoading(false);
     }

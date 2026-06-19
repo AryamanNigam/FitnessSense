@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../lib/supabaseClient";
 import { useAuthStore } from "../store/authStore";
 import apiClient from "../lib/apiClient";
 import type { Profile } from "../types";
@@ -20,26 +19,17 @@ export default function Login() {
     setLoading(true);
 
     try {
-      let session;
+      let token: string;
 
-      if (mode === "signup") {
-        const { data, error: authErr } = await supabase.auth.signUp({ email, password });
-        if (authErr) throw authErr;
-        session = data.session;
-      } else {
-        const { data, error: authErr } = await supabase.auth.signInWithPassword({ email, password });
-        if (authErr) throw authErr;
-        session = data.session;
-      }
+      const endpoint = mode === "signup" ? "/auth/signup" : "/auth/login";
+      const res = await apiClient.post<{ access_token: string | null }>(endpoint, { email, password });
 
-      if (!session) {
+      if (!res.data.access_token) {
         setError("Check your email to confirm your account.");
         return;
       }
+      token = res.data.access_token;
 
-      const token = session.access_token;
-
-      // Try to load existing profile
       let profile: Profile | null = null;
       try {
         const res = await apiClient.get<Profile>("/profile/me", {
@@ -53,7 +43,8 @@ export default function Login() {
       setAuth(token, profile);
       navigate(profile ? "/dashboard" : "/onboarding");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      const detail = (err as any)?.response?.data?.detail;
+      setError(detail ?? (err instanceof Error ? err.message : "Something went wrong"));
     } finally {
       setLoading(false);
     }
