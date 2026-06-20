@@ -1,9 +1,10 @@
+import { Navigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 
 export default function Dashboard() {
   const { profile } = useAuthStore();
 
-  if (!profile) return null;
+  if (!profile) return <Navigate to="/onboarding" replace />;
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">

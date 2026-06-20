@@ -14,7 +14,7 @@ export default function App() {
       .post<{ access_token: string }>("/auth/refresh")
       .then(async (res) => {
         const token = res.data.access_token;
-        useAuthStore.getState().setAuth(token, null);
+        useAuthStore.getState().setAuth(token, useAuthStore.getState().profile);
         try {
           const profileRes = await apiClient.get<Profile>("/profile/me");
           useAuthStore.getState().setAuth(token, profileRes.data);
