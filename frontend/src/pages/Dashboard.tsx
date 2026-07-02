@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../store/authStore";
 import DailyRing from "../components/dashboard/DailyRing";
 import WeightTracker from "../components/dashboard/WeightTracker";
 import apiClient from "../lib/apiClient";
-import type { MealLogResponse, WorkoutLogResponse, WeightLogResponse } from "../types";
+import { useMealLogs, useWeightLogs, useWorkoutLogs, queryKeys } from "../lib/queries";
+import type { WeightLogResponse } from "../types";
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -13,56 +14,47 @@ function todayStr() {
 export default function Dashboard() {
   const { profile } = useAuthStore();
   const navigate = useNavigate();
-  const [mealLogs, setMealLogs]           = useState<MealLogResponse[]>([]);
-  const [workoutDone, setWorkoutDone]     = useState(false);
-  const [weightDone, setWeightDone]       = useState(false);
-  const [weightLogs, setWeightLogs]       = useState<WeightLogResponse[]>([]);
-  const [ringLoading, setRingLoading]     = useState(true);
-  const [weightLoading, setWeightLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const today = todayStr();
 
-  useEffect(() => {
-    const today = todayStr();
+  // Cached queries — instant on tab switch, deduped across the app.
+  const mealsQuery   = useMealLogs();
+  const weightQuery  = useWeightLogs();
+  const workoutQuery = useWorkoutLogs(today);
 
-    const mealPromise = apiClient
-      .get<MealLogResponse[]>("/meals/logs")
-      .then((res) => setMealLogs(res.data))
-      .catch(() => {});
+  const mealLogs    = mealsQuery.data ?? [];
+  const weightLogs  = weightQuery.data ?? [];
+  const workoutDone = (workoutQuery.data?.length ?? 0) > 0;
+  // weightDone is derived from the full weight log — no separate request needed.
+  const weightDone  = weightLogs.some((l) => l.logged_at.slice(0, 10) === today);
 
-    const workoutPromise = apiClient
-      .get<WorkoutLogResponse[]>(`/workouts/logs?date=${today}`)
-      .then((res) => setWorkoutDone(res.data.length > 0))
-      .catch(() => {});
+  const ringLoading   = mealsQuery.isLoading || workoutQuery.isLoading || weightQuery.isLoading;
+  const weightLoading = weightQuery.isLoading;
 
-    const weightTodayPromise = apiClient
-      .get<WeightLogResponse[]>(`/weight/logs?date=${today}`)
-      .then((res) => setWeightDone(res.data.length > 0))
-      .catch(() => {});
-
-    Promise.allSettled([mealPromise, workoutPromise, weightTodayPromise]).finally(() => setRingLoading(false));
-
-    apiClient
-      .get<WeightLogResponse[]>("/weight/logs")
-      .then((res) => setWeightLogs(res.data))
-      .catch(() => {})
-      .finally(() => setWeightLoading(false));
-  }, []);
+  const weightMutation = useMutation({
+    mutationFn: (kg: number) =>
+      apiClient
+        .post<WeightLogResponse>("/weight/logs", { weight_kg: kg, logged_at: today })
+        .then((res) => res.data),
+    onSuccess: (newLog) => {
+      // Write the new log straight into the cache so the ring + tracker update instantly.
+      queryClient.setQueryData<WeightLogResponse[]>(queryKeys.weightLogs(), (prev) =>
+        prev ? [newLog, ...prev] : [newLog]
+      );
+    },
+  });
 
   async function handleWeightLog(kg: number) {
-    const res = await apiClient.post<WeightLogResponse>("/weight/logs", {
-      weight_kg: kg,
-      logged_at: todayStr(),
-    });
-    setWeightDone(true);
-    setWeightLogs((prev) => [res.data, ...prev]);
+    await weightMutation.mutateAsync(kg);
   }
 
   if (!profile) return <Navigate to="/onboarding" replace />;
 
-  const todaysMeals = mealLogs.filter((l) => l.logged_at.slice(0, 10) === todayStr());
+  const todaysMeals = mealLogs.filter((l) => l.logged_at.slice(0, 10) === today);
   const mealDone    = todaysMeals.length > 0;
 
   const greeting     = getGreeting();
-  const today        = new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  const todayLabel   = new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
   const goalLabel    = profile.goal.charAt(0).toUpperCase() + profile.goal.slice(1);
   const activityLabel = profile.activity_level.replace(/_/g, " ");
   const latestWeight = weightLogs[0]?.weight_kg ?? profile.weight_kg;
@@ -82,7 +74,7 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          <div className="px-4 py-2 rounded-xl text-sm" style={{ border: "0.5px solid var(--border)", color: "var(--text-secondary)" }}>{today}</div>
+          <div className="px-4 py-2 rounded-xl text-sm" style={{ border: "0.5px solid var(--border)", color: "var(--text-secondary)" }}>{todayLabel}</div>
           <button className="px-4 py-2 rounded-xl text-sm transition-opacity hover:opacity-80" style={{ background: "var(--surface-1)", color: "var(--text-primary)" }}>
             Generate today's plan
           </button>
