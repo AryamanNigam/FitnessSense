@@ -35,7 +35,7 @@ def get_profile(
     supabase: Client = Depends(get_supabase),
 ):
     result = supabase.table("profiles").select("*").eq("id", user_id).maybe_single().execute()
-    if not result.data:
+    if not result or not result.data:
         raise HTTPException(status_code=404, detail="Profile not found")
     return result.data
 
@@ -52,7 +52,7 @@ def update_profile(
 
     if any(k in updates for k in ("weight_kg", "height_cm", "age", "activity_level", "goal")):
         current = supabase.table("profiles").select("*").eq("id", user_id).maybe_single().execute()
-        if not current.data:
+        if not current or not current.data:
             raise HTTPException(status_code=404, detail="Profile not found")
         merged = {**current.data, **updates}
         updates["tdee"] = compute_tdee(
