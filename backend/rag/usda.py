@@ -1,8 +1,23 @@
 import json
+import re
 from pathlib import Path
 
 FOOD_KEYS = ("FoundationFoods", "SRLegacyFoods")
 ENERGY_NUMBERS = ("208", "957", "958")
+MEAT_CATEGORIES = (
+    "Poultry Products",
+    "Beef Products",
+    "Pork Products",
+    "Lamb, Veal, and Game Products",
+    "Finfish and Shellfish Products",
+    "Sausages and Luncheon Meats",
+)
+# Mixed categories (soups, fast food, entrees) can contain meat, so check the name too.
+MEAT_WORDS = re.compile(
+    r"\b(chicken|beef|pork|lamb|veal|turkey|duck|ham|bacon|sausage|fish|salmon|tuna|shrimp|crab|"
+    r"anchov\w*|meats?|gelatin)\b",
+    re.I,
+)
 
 
 def _amounts(food: dict) -> dict[str, float]:
@@ -40,6 +55,7 @@ def parse_food(food: dict) -> dict | None:
             "carbs_g": round(carbs, 1),
             "fat_g": round(fat, 1),
             "kcal": round(kcal),
+            "is_vegetarian": category not in MEAT_CATEGORIES and not MEAT_WORDS.search(description),
         },
     }
 
