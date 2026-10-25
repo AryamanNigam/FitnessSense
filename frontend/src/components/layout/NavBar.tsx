@@ -43,21 +43,21 @@ export default function NavBar() {
   }
 
   return (
-    <nav className="px-6 py-3 flex items-center justify-between" style={{ background: "var(--surface-1)", borderBottom: "0.5px solid var(--border)" }}>
+    <nav className="px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-y-2" style={{ background: "var(--surface-1)", borderBottom: "0.5px solid var(--border)" }}>
       <div className="flex items-center gap-2">
         <span className="w-2 h-2 rounded-full bg-green-400" />
         <span className="font-semibold text-white text-sm tracking-tight">FitnessSense</span>
       </div>
 
-      <div className="flex items-center gap-1">
+      <div className="order-3 md:order-none w-full md:w-auto flex items-center gap-1 overflow-x-auto -mx-1 px-1">
         {NAV_LINKS.map(({ to, label }) => (
           <NavLink
             key={to}
             to={to}
             className={({ isActive }) =>
               isActive
-                ? "px-4 py-1.5 rounded-full bg-white text-zinc-900 text-sm font-medium"
-                : "px-4 py-1.5 rounded-full text-zinc-400 text-sm hover:text-white transition-colors"
+                ? "px-4 py-1.5 rounded-full bg-white text-zinc-900 text-sm font-medium whitespace-nowrap"
+                : "px-4 py-1.5 rounded-full text-zinc-400 text-sm hover:text-white transition-colors whitespace-nowrap"
             }
           >
             {label}
@@ -75,7 +75,7 @@ export default function NavBar() {
             {initials}
           </div>
           {profile?.name && (
-            <span className="text-sm text-zinc-300">{profile.name}</span>
+            <span className="hidden sm:inline text-sm text-zinc-300">{profile.name}</span>
           )}
         </button>
 
@@ -92,14 +92,6 @@ export default function NavBar() {
               style={{ color: "var(--text-secondary)" }}
             >
               Edit details
-            </button>
-
-            <button
-              onClick={() => { setOpen(false); navigate("/dashboard"); }}
-              className="w-full text-left px-4 py-2.5 text-sm transition-colors hover:opacity-80"
-              style={{ color: "var(--text-secondary)" }}
-            >
-              Settings
             </button>
 
             <div className="mt-1 pt-1" style={{ borderTop: "0.5px solid var(--border)" }}>

@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from supabase import Client
 from app.dependencies import get_supabase, get_current_user
-from app.models.profile import ProfileCreate, ProfileUpdate, ProfileResponse
+from app.models.profile import ProfileCreate, ProfileUpdate, ProfileResponse, SplitUpdate
 from app.services.profile_service import compute_tdee, compute_protein_target
+from app.services.splits import PRESET_SCHEDULES, is_valid_schedule
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
@@ -61,6 +62,37 @@ def update_profile(
         updates["protein_target_g"] = compute_protein_target(merged["weight_kg"], merged["goal"])
 
     result = supabase.table("profiles").update(updates).eq("id", user_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return result.data[0]
+
+
+@router.patch("/split", response_model=ProfileResponse)
+def set_split(
+    body: SplitUpdate,
+    user_id: str = Depends(get_current_user),
+    supabase: Client = Depends(get_supabase),
+):
+    # Presets are authoritative: fill the schedule from server config so it can't
+    # drift. `custom` must supply its own valid 7-day schedule.
+    if body.split_type == "custom":
+        if body.schedule is None or not is_valid_schedule(body.schedule):
+            raise HTTPException(
+                status_code=400,
+                detail="A custom split requires a valid schedule mapping mon–sun to focus values.",
+            )
+        schedule = body.schedule
+    else:
+        schedule = PRESET_SCHEDULES[body.split_type]
+
+    split = {"split_type": body.split_type, "schedule": schedule}
+
+    result = (
+        supabase.table("profiles")
+        .update({"workout_split": split})
+        .eq("id", user_id)
+        .execute()
+    )
     if not result.data:
         raise HTTPException(status_code=404, detail="Profile not found")
     return result.data[0]

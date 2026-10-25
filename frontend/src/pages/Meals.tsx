@@ -1,7 +1,12 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import apiClient from "../lib/apiClient";
 import MacroCard from "../components/meals/MacroCard";
 import Modal from "../components/ui/Modal";
+import { useMealLogs, queryKeys } from "../lib/queries";
+import { useToast } from "../components/ui/toastContext";
+import { EmptyState, ErrorNotice, Skeleton } from "../components/ui/QueryState";
+import { errorMessage } from "../lib/errors";
 import type { GeneratedMeal, MealLogResponse, MealPlanResponse } from "../types";
 
 type Mode = "ingredients" | "random";
@@ -23,17 +28,50 @@ export default function Meals() {
   const [loggingIndex, setLoggingIndex] = useState<number | null>(null);
   const [loggedIndices, setLoggedIndices] = useState<Set<number>>(new Set());
 
-  const [logs, setLogs] = useState<MealLogResponse[]>([]);
-  const [logsLoading, setLogsLoading] = useState(true);
   const [deletingLogId, setDeletingLogId] = useState<string | null>(null);
 
-  useEffect(() => {
-    apiClient
-      .get<MealLogResponse[]>("/meals/logs")
-      .then((res) => setLogs(res.data))
-      .catch(() => {})
-      .finally(() => setLogsLoading(false));
-  }, []);
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const mealsQuery = useMealLogs();          // same cache the Dashboard reads
+  const logs = mealsQuery.data ?? [];
+  const logsLoading = mealsQuery.isLoading;
+
+  const logMutation = useMutation({
+    mutationFn: (meal: GeneratedMeal) =>
+      apiClient
+        .post<MealLogResponse>("/meals/logs", {
+          meal_name: meal.meal_name,
+          items: meal.items,
+          total_kcal: meal.total_kcal,
+          instructions: meal.instructions,
+          logged_at: todayStr(),
+        })
+        .then((res) => res.data),
+    onSuccess: (newLog) => {
+      // Prepend into the shared cache → Dashboard's meal card updates too.
+      queryClient.setQueryData<MealLogResponse[]>(queryKeys.mealLogs(), (prev) =>
+        prev ? [newLog, ...prev] : [newLog]
+      );
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      try {
+        await apiClient.delete(`/meals/logs/${id}`);
+      } catch (err) {
+        // 404 = the row is already gone on the server. That's the end-state we
+        // wanted, so treat it as success and let the UI reconcile (idempotent delete).
+        if ((err as { response?: { status?: number } })?.response?.status !== 404) throw err;
+      }
+    },
+    onSuccess: (_res, id) => {
+      // Remove from the shared cache → Dashboard's meal card drops it too.
+      queryClient.setQueryData<MealLogResponse[]>(queryKeys.mealLogs(), (prev) =>
+        prev ? prev.filter((l) => l.id !== id) : prev
+      );
+    },
+  });
 
   function addIngredient() {
     const value = ingredientInput.trim().replace(/,$/, "");
@@ -59,8 +97,7 @@ export default function Meals() {
       });
       setMeals(res.data.meals);
     } catch (err: unknown) {
-      const detail = (err as any)?.response?.data?.detail;
-      setError(detail ?? "Failed to generate meal plan. Try again.");
+      setError(errorMessage(err, "Failed to generate meal plan. Try again."));
     } finally {
       setLoading(false);
     }
@@ -69,17 +106,11 @@ export default function Meals() {
   async function handleLog(meal: GeneratedMeal, index: number) {
     setLoggingIndex(index);
     try {
-      const res = await apiClient.post<MealLogResponse>("/meals/logs", {
-        meal_name: meal.meal_name,
-        items: meal.items,
-        total_kcal: meal.total_kcal,
-        instructions: meal.instructions,
-        logged_at: todayStr(),
-      });
+      await logMutation.mutateAsync(meal);
       setLoggedIndices((prev) => new Set(prev).add(index));
-      setLogs((prev) => [res.data, ...prev]);
-    } catch {
-      setError("Failed to log meal. Try again.");
+      toast.success(`${meal.meal_name} logged`);
+    } catch (err) {
+      toast.error(errorMessage(err, "Failed to log meal. Try again."));
     } finally {
       setLoggingIndex(null);
     }
@@ -88,10 +119,10 @@ export default function Meals() {
   async function handleDeleteLog(id: string) {
     setDeletingLogId(id);
     try {
-      await apiClient.delete(`/meals/logs/${id}`);
-      setLogs((prev) => prev.filter((l) => l.id !== id));
-    } catch {
-      setError("Failed to delete log. Try again.");
+      await deleteMutation.mutateAsync(id);
+      toast.success("Meal log removed");
+    } catch (err) {
+      toast.error(errorMessage(err, "Failed to delete log. Try again."));
     } finally {
       setDeletingLogId(null);
     }
@@ -177,7 +208,7 @@ export default function Meals() {
 
       {/* Results */}
       {meals && (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {meals.map((meal, i) => (
             <MacroCard
               key={i}
@@ -201,9 +232,14 @@ export default function Meals() {
       <div className="rounded-2xl p-5" style={{ background: "var(--surface-1)" }}>
         <p className="text-sm font-medium mb-3" style={{ color: "var(--text-primary)" }}>Log history</p>
         {logsLoading ? (
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>Loading…</p>
+          <div className="space-y-3">
+            <Skeleton className="h-10" />
+            <Skeleton className="h-10" />
+          </div>
+        ) : mealsQuery.isError ? (
+          <ErrorNotice message="Couldn't load your meal history." onRetry={() => mealsQuery.refetch()} />
         ) : logs.length === 0 ? (
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>No meals logged yet.</p>
+          <EmptyState title="No meals logged yet" hint="Generate a plan above and log the meals you eat." />
         ) : (
           <div>
             {logs.map((log, i) => (
@@ -214,6 +250,9 @@ export default function Meals() {
               >
                 <div>
                   <p className="text-sm" style={{ color: "var(--text-primary)" }}>{log.meal_name}</p>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                    {log.items.map((item) => item.name).join(", ")}
+                  </p>
                   <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
                     {log.logged_at} · {log.total_kcal} kcal
                   </p>

@@ -77,6 +77,7 @@ FitnessSense/
 │   │   └── services/
 │   │       ├── meal_service.py
 │   │       ├── workout_service.py
+│   │       ├── splits.py          # Preset schedules + focus→muscle-group map
 │   │       ├── progress_service.py
 │   │       └── rag_service.py
 │   ├── rag/
@@ -111,6 +112,7 @@ Supabase manages auth — `auth.users` is provided by Supabase and is not redefi
 | activity_level | text | `sedentary` \| `light` \| `moderate` \| `active` \| `very_active` |
 | tdee | int | Computed on save (kcal/day) |
 | protein_target_g | int | Computed on save from goal + weight |
+| workout_split | jsonb | `{ split_type, schedule }` — weekly `weekday → focus\|rest` map (see Workout Splits). Null until the user picks a split |
 | created_at | timestamptz | default now() |
 | updated_at | timestamptz | |
 
@@ -139,6 +141,7 @@ Supabase manages auth — `auth.users` is provided by Supabase and is not redefi
 | user_id | uuid | FK → profiles.id, **indexed** |
 | plan | jsonb | Array of `{exercise, sets, reps, rest_s}` |
 | notes | text | |
+| session_focus | text | Focus this session was generated for (`push`, `pull`, `legs`, …); enables the weekly done/pending view. Nullable for legacy rows |
 | logged_at | date | |
 
 ### `chat_history`
@@ -177,8 +180,9 @@ All endpoints except `/auth/*` and `/health` require `Authorization: Bearer <sup
 | Method | Path | Description |
 |---|---|---|
 | POST | `/profile` | Create profile after signup (onboarding) |
-| GET | `/profile/me` | Get current user profile |
+| GET | `/profile/me` | Get current user profile (includes `workout_split`) |
 | PATCH | `/profile/me` | Update profile fields |
+| PATCH | `/profile/split` | Set the user's workout split (`split_type` + weekly `schedule`) |
 
 ### Meals
 | Method | Path | Description |
@@ -201,23 +205,31 @@ All endpoints except `/auth/*` and `/health` require `Authorization: Bearer <sup
 ### Workouts
 | Method | Path | Description |
 |---|---|---|
-| POST | `/workouts/generate` | Generate a workout plan for the day *(rate-limited)* |
+| POST | `/workouts/generate` | Generate a split-aware workout *(rate-limited)* — see split logic below |
 | GET | `/workouts/logs` | Get workout logs (query: `?date=YYYY-MM-DD`) |
-| POST | `/workouts/logs` | Save a workout log entry |
+| POST | `/workouts/logs` | Save a workout log entry (includes `session_focus`) |
 | DELETE | `/workouts/logs/{id}` | Delete a workout log |
+
+**`POST /workouts/generate` request body:**
+```json
+{ "focus": "pull" }   // optional; defaults to today's scheduled focus
+```
+- If `focus` is omitted, the backend derives it from `workout_split.schedule[weekday(today)]`. A `rest` focus returns a 400/no-op (nothing to generate).
+- The resolved focus is expanded via the server-side muscle-group map and injected into the Gemini prompt so the session targets the right muscles.
 
 ### Progress
 | Method | Path | Description |
 |---|---|---|
 | POST | `/progress/weight` | Log a weight entry |
 | GET | `/progress/weight` | Get weight history (query: `?days=30`) |
-| GET | `/progress/summary` | Aggregated calorie + workout summary |
+| GET | `/progress/summary` | Aggregated calorie + workout summary (query: `?days=30`) |
 
 ### Chat
 | Method | Path | Description |
 |---|---|---|
 | POST | `/chat` | Send a message; returns a **streamed (SSE)** RAG-grounded answer *(rate-limited)* |
 | GET | `/chat/history` | Get chat history for the current user |
+| DELETE | `/chat/history` | Clear the current user's chat history |
 
 Ownership note: `DELETE` and `GET .../logs/{id}` handlers re-check `user_id` against the JWT before acting, so a valid token for user A can never read or delete user B's row even with a guessed id.
 
@@ -227,9 +239,21 @@ Ownership note: `DELETE` and `GET .../logs/{id}` handlers re-check `user_id` aga
 
 This is the part most worth getting exactly right.
 
-- Supabase issues a JWT on login/signup, signed with the project's JWT secret (HS256).
-- The frontend keeps the JWT **in memory** (Zustand), never in `localStorage`, to limit XSS token theft. Session refresh is handled by the Supabase client.
-- Every backend request carries `Authorization: Bearer <jwt>`. A FastAPI dependency `get_current_user` (`core/security.py`) verifies the signature and expiry against `SUPABASE_JWT_SECRET` and extracts the user id from the `sub` claim. A missing, invalid, or expired token returns `401`.
+### Token verification (asymmetric / JWKS)
+
+- Supabase issues a signed JWT on login/signup. The backend verifies it **asymmetrically** against Supabase's **public signing keys**, fetched from the project's JWKS endpoint (`{SUPABASE_URL}/auth/v1/.well-known/jwks.json`) and cached in memory.
+- Every backend request carries `Authorization: Bearer <jwt>`. A FastAPI dependency `get_current_user` (`dependencies.py` → `core/security.py`) reads the token's `kid` (key id) and `alg` from its header, selects the matching public key from the JWKS, and calls `jwt.decode(...)` to verify the **signature and expiry** with `audience="authenticated"`. It then extracts the user id from the `sub` claim. A missing, invalid, or expired token returns `401`.
+- **Asymmetric, not symmetric.** The verifying backend holds only *public* keys — it never possesses a secret capable of *signing* tokens (Supabase's private key does that). This is stronger than an HS256 shared secret and lets Supabase rotate keys without a backend redeploy. (`config.py` still declares a `supabase_jwt_secret` setting, but the JWKS path does not use it — it is currently vestigial.)
+
+### Session storage & refresh (in-memory access token + HttpOnly refresh cookie)
+
+- Auth calls (`signup`, `login`, `refresh`, `logout`) go through the **FastAPI backend**, which proxies Supabase. The Supabase JS client is not used for the app's session lifecycle.
+- The **access token** (short-lived JWT, ~1h) is kept **in memory** (Zustand), never in `localStorage`, to limit XSS token theft. It is lost on tab close/reload by design.
+- The **refresh token** is stored in an **HttpOnly cookie** set by the backend, scoped to `/api/v1/auth` (`SameSite=Lax` in dev, `SameSite=None; Secure` in prod for the cross-domain Vercel→Render call). `HttpOnly` means JS cannot read it, so XSS cannot steal it; the cookie survives page reloads.
+- **Silent refresh:** on app mount, and whenever a request gets a `401`, the Axios interceptor (`lib/apiClient.ts`) calls `POST /auth/refresh` (which reads the cookie server-side and mints a new access token) and **replays the original request**. Concurrent `401`s queue behind a single in-flight refresh (no thundering herd); a request is retried at most once; `401`s from `/auth/*` endpoints skip retry and redirect to login.
+
+### Row isolation (service key + application-level scoping)
+
 - The backend connects to Postgres with the **Supabase service role key**. This key **bypasses RLS by design**, so row isolation for backend traffic is enforced in application code: every query is scoped to the authenticated `user_id`, and there is no code path that returns rows without that filter.
 - RLS (`auth.uid() = user_id`) is enabled on all tables as **defense-in-depth for any direct anon-key client access**. It is intentionally *not* the primary guard for service-key traffic — conflating the two is a common mistake, so the responsibilities are kept explicit here.
 
@@ -273,16 +297,54 @@ Streamed (SSE) answer → frontend
 
 ---
 
+## Workout Splits
+
+A **split** is how the user organizes training across the week. The core design decision: every split — 3-day PPL, 6-day PPL, 5-day bro split, and fully custom — is represented by **one data structure**, a 7-day weekly schedule mapping each weekday to a session focus (or rest). Presets are just pre-filled versions of that schedule; "custom" is the user filling it in.
+
+**Model: weekly calendar (not an advancing rotation).** Today's session is derived, never stored as rotation state:
+```
+today_focus = workout_split.schedule[weekday(today)]
+```
+This keeps tracking trivial (no cursor to keep in sync) and matches the requirement that users choose *which* weekdays are rest days. A missed day simply shows as a missed slot in the weekly view rather than shifting everything.
+
+**Stored on `profiles.workout_split` (jsonb):**
+```json
+{
+  "split_type": "ppl_6",                 // ppl_3 | ppl_6 | bro_5 | custom
+  "schedule": {
+    "mon": "push", "tue": "pull", "wed": "legs",
+    "thu": "push", "fri": "pull", "sat": "legs", "sun": "rest"
+  }
+}
+```
+
+**Focus vocabulary (fixed enum, shared frontend + backend):**
+`push · pull · legs · chest · back · shoulders · arms · upper · lower · full_body · rest`
+
+**Muscle-group map (server-side constant, `services/splits.py`).** Each focus expands to the muscle groups fed into the generation prompt, so Gemini targets the right areas:
+```
+push → chest, front delts, triceps       pull  → back, biceps, rear delts
+legs → quads, hamstrings, glutes, calves  upper → chest, back, shoulders, arms
+back → lats, traps, rhomboids             lower → quads, hamstrings, glutes, calves
+chest/shoulders/arms → map to themselves  full_body → all major groups
+```
+
+**Presets** live in the same config, keyed by `split_type` (e.g. `ppl_3` trains Mon/Wed/Fri and rests the rest; `bro_5` = Chest/Back/Shoulders/Legs/Arms + 2 rest). Selecting a preset copies its schedule into `workout_split`; `custom` starts editable.
+
+**Generation flow:** `POST /workouts/generate` resolves the focus (request body override → else today's schedule), expands it via the muscle map, and generates a session for just those muscles. Each saved log records its `session_focus`, so the app can render a weekly done / pending / rest / missed view by comparing the schedule against the logs.
+
+---
+
 ## Frontend ↔ Backend Connection
 
-- All API calls go through `src/lib/apiClient.ts`, an Axios instance that injects `Authorization: Bearer <jwt>` on every request and handles `401` by triggering a session refresh / redirect to login.
-- The Supabase client (`src/lib/supabaseClient.ts`) is used **only** for auth operations (signup, login, session refresh). All data reads/writes go through the FastAPI backend.
+- All API calls go through `src/lib/apiClient.ts`, an Axios instance (with `withCredentials: true`) that injects `Authorization: Bearer <jwt>` on every request and handles `401` with a queued silent refresh against `POST /auth/refresh`, then replays the original request (see Authentication above).
+- Auth operations (signup, login, refresh, logout) go through the **FastAPI backend**, which proxies Supabase and manages the HttpOnly refresh cookie. The Supabase JS client (`src/lib/supabaseClient.ts`) is not part of the session lifecycle. All data reads/writes also go through the FastAPI backend.
 - CORS on FastAPI allows `https://fitnesssense.vercel.app` (production) and `http://localhost:5173` (development).
 - The chat client consumes the `/chat` SSE stream and renders tokens incrementally.
 
 ### Environment variables
 - **Frontend:** `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
-- **Backend:** `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_JWT_SECRET`, `GEMINI_API_KEY`, `CHROMA_PERSIST_DIR`
+- **Backend:** `SUPABASE_URL` (also used to fetch the JWKS for token verification), `SUPABASE_SERVICE_KEY`, `SUPABASE_ANON_KEY`, `GEMINI_API_KEY`, `CHROMA_PERSIST_DIR`. (`SUPABASE_JWT_SECRET` is still declared in `config.py` but unused now that verification is JWKS-based.)
 
 ---
 
@@ -293,3 +355,15 @@ Streamed (SSE) answer → frontend
 - **External-call resilience:** Gemini calls in `/meals/generate`, `/workouts/generate`, and `/chat` are wrapped with a timeout and a graceful error response, so an upstream failure returns a clean `503`-style message rather than a hanging request.
 - **Rate limiting:** the three generate/chat routes are rate-limited per user to bound Gemini spend.
 - **Testing:** `backend/tests/` covers JWT verification, user-scoping on a representative router, and the retriever returning the expected top-k shape.
+
+
+---
+
+## Errors, Deployment & Operations
+
+- **Error shape:** every error returns `{ "detail": "<message>", "code": "<slug>" }` (validation errors add an `errors` list). Unhandled exceptions return a generic 500 and are logged server-side only. Handlers live in `app/core/errors.py`.
+- **CORS:** localhost and the Vercel domain are allowed by default; add more origins with the comma-separated `CORS_ORIGINS` env var.
+- **Backend (Render):** `render.yaml` + `backend/Dockerfile`; a 1 GB disk is mounted at `/data` and `CHROMA_PERSIST_DIR=/data/chroma_db`. After first deploy, open a Render shell and run `python -m rag.ingest <usda.json> --reset`. `/api/v1/health` reports `chroma: ok | empty | error`.
+- **Frontend (Vercel):** set `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`; `frontend/vercel.json` rewrites all routes to the SPA.
+- **Database:** run `backend/migrations/chat_history.sql` once in Supabase.
+- **Demo + smoke test:** `python scripts/seed_demo.py` creates `demo@fitnesssense.app` with 3 weeks of data; `python scripts/smoke_test.py --base-url <api>` exercises login, profile, meals, workouts, weight, progress and chat.

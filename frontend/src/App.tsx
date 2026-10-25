@@ -1,11 +1,11 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import Meals from "./pages/Meals";
 import Workouts from "./pages/Workouts";
-import Progress from "./pages/Progress";
+import WorkoutSplit from "./pages/WorkoutSplit";
 import AskAI from "./pages/AskAI";
 import ProfileEdit from "./pages/ProfileEdit";
 import RequireAuth from "./components/auth/RequireAuth";
@@ -13,6 +13,8 @@ import AppLayout from "./components/layout/AppLayout";
 import { useAuthStore } from "./store/authStore";
 import apiClient from "./lib/apiClient";
 import type { Profile } from "./types";
+
+const Progress = lazy(() => import("./pages/Progress"));
 
 export default function App() {
   useEffect(() => {
@@ -58,7 +60,15 @@ export default function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/meals" element={<Meals />} />
           <Route path="/workouts" element={<Workouts />} />
-          <Route path="/progress" element={<Progress />} />
+          <Route path="/workouts/split" element={<WorkoutSplit />} />
+          <Route
+            path="/progress"
+            element={
+              <Suspense fallback={null}>
+                <Progress />
+              </Suspense>
+            }
+          />
           <Route path="/ask-ai" element={<AskAI />} />
           <Route path="/profile/edit" element={<ProfileEdit />} />
         </Route>

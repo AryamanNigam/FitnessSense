@@ -1,0 +1,170 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="870" viewBox="0 0 1600 870" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+    <style>
+      .h { font-size: 20px; font-weight: 700; fill: #0f172a; }
+      .hs { font-size: 13px; fill: #475569; }
+      .t { font-size: 15px; font-weight: 600; fill: #0f172a; }
+      .s { font-size: 13px; fill: #475569; }
+      .lbl { font-size: 12px; fill: #334155; text-anchor: middle; }
+      .inner { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1; }
+      .line { stroke: #334155; stroke-width: 1.8; fill: none; }
+      .dash { stroke: #334155; stroke-width: 1.8; fill: none; stroke-dasharray: 6 5; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="870" fill="#f8fafc"/>
+  <text x="40" y="58" font-size="28" font-weight="800" fill="#0f172a">FitnessSense — System Architecture</text>
+  <text x="40" y="84" class="hs">The backend is the single trusted entry point: it verifies every JWT, scopes every query to the user, and owns all AI calls.</text>
+
+  <!-- ===== Frontend ===== -->
+  <rect x="40" y="110" width="380" height="560" rx="14" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="60" y="142" class="h">Frontend · React + Vite</text>
+  <text x="60" y="162" class="hs">TypeScript · Tailwind · hosted on Vercel</text>
+
+  <rect x="60" y="180" width="340" height="60" rx="8" class="inner"/>
+  <text x="74" y="204" class="t">Pages</text>
+  <text x="74" y="224" class="s">Dashboard · Meals · Workouts · Progress · Ask AI</text>
+
+  <rect x="60" y="255" width="340" height="60" rx="8" class="inner"/>
+  <text x="74" y="279" class="t">React Query</text>
+  <text x="74" y="299" class="s">server-state cache · shared query keys</text>
+
+  <rect x="60" y="330" width="340" height="60" rx="8" class="inner"/>
+  <text x="74" y="354" class="t">Zustand store</text>
+  <text x="74" y="374" class="s">access token in memory · profile</text>
+
+  <rect x="60" y="405" width="340" height="60" rx="8" class="inner"/>
+  <text x="74" y="429" class="t">Axios apiClient</text>
+  <text x="74" y="449" class="s">Bearer header · single-flight 401 refresh</text>
+
+  <rect x="60" y="480" width="340" height="60" rx="8" class="inner"/>
+  <text x="74" y="504" class="t">chatStream (fetch)</text>
+  <text x="74" y="524" class="s">reads SSE tokens incrementally</text>
+
+  <rect x="60" y="555" width="340" height="60" rx="8" class="inner"/>
+  <text x="74" y="579" class="t">Router + RequireAuth</text>
+  <text x="74" y="599" class="s">waits for session hydration, gates routes</text>
+
+  <!-- ===== Backend ===== -->
+  <rect x="560" y="110" width="480" height="560" rx="14" fill="#ecfdf5" stroke="#059669" stroke-width="2"/>
+  <text x="580" y="142" class="h">Backend · FastAPI (Python)</text>
+  <text x="580" y="162" class="hs">Docker container on Render</text>
+
+  <rect x="580" y="180" width="440" height="60" rx="8" class="inner"/>
+  <text x="594" y="204" class="t">CORS + error handlers</text>
+  <text x="594" y="224" class="s">allowlisted origins · uniform { detail, code } errors</text>
+
+  <rect x="580" y="255" width="440" height="60" rx="8" class="inner"/>
+  <text x="594" y="279" class="t">get_current_user (auth dependency)</text>
+  <text x="594" y="299" class="s">verify JWT signature via JWKS → user_id from "sub"</text>
+
+  <rect x="580" y="330" width="440" height="60" rx="8" class="inner"/>
+  <text x="594" y="354" class="t">Rate limiter</text>
+  <text x="594" y="374" class="s">per-user limit on generate + chat routes</text>
+
+  <rect x="580" y="405" width="440" height="75" rx="8" class="inner"/>
+  <text x="594" y="429" class="t">Routers  /api/v1</text>
+  <text x="594" y="449" class="s">auth · profile · meals · workouts</text>
+  <text x="594" y="467" class="s">weight · progress · chat · health</text>
+
+  <rect x="580" y="495" width="440" height="75" rx="8" class="inner"/>
+  <text x="594" y="519" class="t">Services</text>
+  <text x="594" y="539" class="s">TDEE + protein math · split → muscle groups</text>
+  <text x="594" y="557" class="s">meal / workout generation · RAG chain</text>
+
+  <rect x="580" y="585" width="440" height="60" rx="8" class="inner"/>
+  <text x="594" y="609" class="t">Gemini client</text>
+  <text x="594" y="629" class="s">model fallback · timeouts · clean 503 on failure</text>
+
+  <!-- ===== Supabase ===== -->
+  <rect x="1180" y="110" width="380" height="250" rx="14" fill="#f5f3ff" stroke="#7c3aed" stroke-width="2"/>
+  <text x="1200" y="142" class="h">Supabase</text>
+  <text x="1200" y="162" class="hs">managed auth + Postgres</text>
+
+  <rect x="1200" y="180" width="340" height="60" rx="8" class="inner"/>
+  <text x="1214" y="204" class="t">Auth</text>
+  <text x="1214" y="224" class="s">issues JWTs · publishes JWKS public keys</text>
+
+  <rect x="1200" y="255" width="340" height="85" rx="8" class="inner"/>
+  <text x="1214" y="279" class="t">Postgres</text>
+  <text x="1214" y="299" class="s">profiles · meal_logs · workout_logs</text>
+  <text x="1214" y="317" class="s">weight_logs · chat_history  (RLS backstop)</text>
+
+  <!-- ===== Gemini ===== -->
+  <rect x="1180" y="390" width="380" height="130" rx="14" fill="#fffbeb" stroke="#d97706" stroke-width="2"/>
+  <text x="1200" y="422" class="h">Google Gemini API</text>
+  <text x="1200" y="450" class="s">Flash models: JSON meal / workout plans</text>
+  <text x="1200" y="470" class="s">Streamed chat answers</text>
+  <text x="1200" y="490" class="s">gemini-embedding-001 (768-d vectors)</text>
+
+  <!-- ===== ChromaDB ===== -->
+  <rect x="1180" y="550" width="380" height="120" rx="14" fill="#fff1f2" stroke="#e11d48" stroke-width="2"/>
+  <text x="1200" y="582" class="h">ChromaDB</text>
+  <text x="1200" y="610" class="s">USDA food index · cosine similarity</text>
+  <text x="1200" y="630" class="s">persistent Render disk: /data/chroma_db</text>
+  <text x="1200" y="650" class="s">loaded from disk, never re-ingested on boot</text>
+
+  <!-- ===== Frontend <-> Backend ===== -->
+  <line x1="420" y1="290" x2="556" y2="290" class="line" marker-end="url(#arrow)"/>
+  <text x="490" y="262" class="lbl">HTTPS REST (JSON)</text>
+  <text x="490" y="278" class="lbl">+ Bearer JWT</text>
+
+  <line x1="556" y1="390" x2="424" y2="390" class="line" marker-end="url(#arrow)"/>
+  <text x="490" y="362" class="lbl">SSE token stream</text>
+  <text x="490" y="378" class="lbl">(chat replies)</text>
+
+  <line x1="424" y1="490" x2="556" y2="490" class="line" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text x="490" y="462" class="lbl">HttpOnly refresh</text>
+  <text x="490" y="478" class="lbl">cookie (/auth only)</text>
+
+  <!-- ===== Backend -> right column ===== -->
+  <line x1="1040" y1="210" x2="1196" y2="210" class="line" marker-end="url(#arrow)"/>
+  <text x="1110" y="182" class="lbl">login / refresh proxy</text>
+  <text x="1110" y="198" class="lbl">JWKS keys (cached)</text>
+
+  <line x1="1040" y1="297" x2="1196" y2="297" class="line" marker-end="url(#arrow)"/>
+  <text x="1110" y="269" class="lbl">service key</text>
+  <text x="1110" y="285" class="lbl">every query by user_id</text>
+
+  <line x1="1040" y1="455" x2="1176" y2="455" class="line" marker-end="url(#arrow)"/>
+  <text x="1110" y="427" class="lbl">prompts → JSON,</text>
+  <text x="1110" y="443" class="lbl">stream, embeddings</text>
+
+  <line x1="1040" y1="610" x2="1176" y2="610" class="line" marker-end="url(#arrow)"/>
+  <text x="1110" y="582" class="lbl">top-5 vector</text>
+  <text x="1110" y="598" class="lbl">search (RAG)</text>
+
+  <!-- ===== Offline ingestion ===== -->
+  <rect x="560" y="720" width="1000" height="115" rx="14" fill="#f1f5f9" stroke="#64748b" stroke-width="2" stroke-dasharray="8 6"/>
+  <text x="580" y="748" class="t">Offline ingestion · python -m rag.ingest</text>
+  <text x="890" y="748" class="s">one-time job, run from a Render shell</text>
+
+  <rect x="580" y="770" width="215" height="44" rx="8" class="inner"/>
+  <text x="687" y="797" class="s" text-anchor="middle">USDA FoodData JSON</text>
+  <line x1="795" y1="792" x2="826" y2="792" class="line" marker-end="url(#arrow)"/>
+
+  <rect x="830" y="770" width="225" height="44" rx="8" class="inner"/>
+  <text x="942" y="797" class="s" text-anchor="middle">Parse → 1 text per food</text>
+  <line x1="1055" y1="792" x2="1086" y2="792" class="line" marker-end="url(#arrow)"/>
+
+  <rect x="1090" y="770" width="200" height="44" rx="8" class="inner"/>
+  <text x="1190" y="797" class="s" text-anchor="middle">Embed (Gemini)</text>
+  <line x1="1290" y1="792" x2="1321" y2="792" class="line" marker-end="url(#arrow)"/>
+
+  <rect x="1325" y="770" width="215" height="44" rx="8" class="inner"/>
+  <text x="1432" y="797" class="s" text-anchor="middle">Upsert into ChromaDB</text>
+
+  <line x1="1432" y1="770" x2="1432" y2="674" class="dash" marker-end="url(#arrow)"/>
+
+  <!-- ===== Legend ===== -->
+  <rect x="40" y="720" width="380" height="115" rx="14" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="60" y="748" class="t">Legend</text>
+  <line x1="60" y1="772" x2="110" y2="772" class="line" marker-end="url(#arrow)"/>
+  <text x="122" y="776" class="s">live request path</text>
+  <line x1="60" y1="796" x2="110" y2="796" class="dash" marker-end="url(#arrow)"/>
+  <text x="122" y="800" class="s">offline / one-time</text>
+  <text x="60" y="824" class="s">The browser never touches the DB or Gemini directly.</text>
+</svg>

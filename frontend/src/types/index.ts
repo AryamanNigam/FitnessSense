@@ -1,6 +1,21 @@
 export type Goal = "cut" | "bulk" | "maintain";
 export type ActivityLevel = "sedentary" | "light" | "moderate" | "active" | "very_active";
 
+export type SplitType = "ppl_3" | "ppl_6" | "bro_5" | "custom";
+export type Focus =
+  | "push" | "pull" | "legs"
+  | "chest" | "back" | "shoulders" | "arms"
+  | "upper" | "lower" | "full_body"
+  | "rest";
+
+// weekday key ("mon"…"sun") -> focus | "rest"
+export type Schedule = Record<string, Focus>;
+
+export interface WorkoutSplit {
+  split_type: SplitType;
+  schedule: Schedule;
+}
+
 export interface Profile {
   id: string;
   name: string;
@@ -11,6 +26,7 @@ export interface Profile {
   activity_level: ActivityLevel;
   tdee: number;
   protein_target_g: number;
+  workout_split: WorkoutSplit | null;
   created_at: string;
   updated_at: string;
 }
@@ -65,6 +81,7 @@ export interface WorkoutExercise {
 export interface GeneratedWorkout {
   exercises: WorkoutExercise[];
   notes: string;
+  session_focus: string;
 }
 
 export interface WorkoutLogResponse {
@@ -72,6 +89,7 @@ export interface WorkoutLogResponse {
   user_id: string;
   plan: WorkoutExercise[];
   notes: string | null;
+  session_focus: string | null;
   logged_at: string;
 }
 
@@ -81,4 +99,27 @@ export interface WeightLogResponse {
   user_id: string;
   weight_kg: number;
   logged_at: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+}
+
+export interface DailyProgress {
+  date: string;
+  kcal: number;
+  workouts: number;
+}
+
+export interface ProgressSummary {
+  days: number;
+  calorie_target: number;
+  avg_kcal: number;
+  days_with_meals: number;
+  workouts_completed: number;
+  weight: { start_kg: number | null; latest_kg: number | null; change_kg: number | null };
+  daily: DailyProgress[];
 }

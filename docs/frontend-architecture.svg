@@ -1,0 +1,207 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="985" viewBox="0 0 1600 985" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+    <style>
+      .ln { font-size: 17px; font-weight: 700; fill: #ffffff; }
+      .lf { font-size: 12px; fill: #e2e8f0; }
+      .t { font-size: 14px; font-weight: 600; fill: #0f172a; }
+      .s { font-size: 12.5px; fill: #475569; }
+      .lbl { font-size: 12px; fill: #334155; }
+      .inner { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1; }
+      .line { stroke: #334155; stroke-width: 1.8; fill: none; }
+      .ph { font-size: 18px; font-weight: 700; fill: #0f172a; }
+      .ps { font-size: 12.5px; fill: #475569; }
+      .ct { font-size: 13px; fill: #0f172a; text-anchor: middle; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="985" fill="#f8fafc"/>
+  <text x="40" y="58" font-size="28" font-weight="800" fill="#0f172a">FitnessSense — Frontend Architecture</text>
+  <text x="40" y="84" font-size="13" fill="#475569">Five layers, each talking only to the one below. React 19 · Vite · TypeScript · Tailwind · hosted on Vercel.</text>
+
+  <!-- ===== Layer 1: Bootstrap ===== -->
+  <rect x="40" y="110" width="1060" height="100" rx="12" fill="#f1f5f9" stroke="#64748b" stroke-width="1.5"/>
+  <rect x="40" y="110" width="170" height="100" rx="12" fill="#64748b"/>
+  <text x="56" y="152" class="ln">1 · Bootstrap</text>
+  <text x="56" y="172" class="lf">main.tsx</text>
+  <rect x="230" y="135" width="190" height="50" rx="8" class="inner"/>
+  <text x="325" y="165" class="ct">ErrorBoundary</text>
+  <line x1="420" y1="160" x2="456" y2="160" class="line" marker-end="url(#arrow)"/>
+  <rect x="460" y="135" width="210" height="50" rx="8" class="inner"/>
+  <text x="565" y="165" class="ct">QueryClientProvider</text>
+  <line x1="670" y1="160" x2="706" y2="160" class="line" marker-end="url(#arrow)"/>
+  <rect x="710" y="135" width="170" height="50" rx="8" class="inner"/>
+  <text x="795" y="165" class="ct">ToastProvider</text>
+  <line x1="880" y1="160" x2="916" y2="160" class="line" marker-end="url(#arrow)"/>
+  <rect x="920" y="135" width="160" height="50" rx="8" class="inner"/>
+  <text x="1000" y="165" class="ct">&lt;App /&gt;</text>
+  <text x="440" y="202" class="lbl" font-style="italic">outermost catches everything · one shared cache · toasts via context</text>
+
+  <!-- ===== Layer 2: Routing ===== -->
+  <rect x="40" y="230" width="1060" height="110" rx="12" fill="#eef2ff" stroke="#4f46e5" stroke-width="1.5"/>
+  <rect x="40" y="230" width="170" height="110" rx="12" fill="#4f46e5"/>
+  <text x="56" y="277" class="ln">2 · Routing</text>
+  <text x="56" y="297" class="lf">App.tsx · auth/ · layout/</text>
+  <rect x="230" y="250" width="197" height="70" rx="8" class="inner"/>
+  <text x="244" y="272" class="t">App</text>
+  <text x="244" y="291" class="s">POST /auth/refresh on mount</text>
+  <text x="244" y="308" class="s">→ setHydrated()</text>
+  <rect x="447" y="250" width="197" height="70" rx="8" class="inner"/>
+  <text x="461" y="272" class="t">RequireAuth</text>
+  <text x="461" y="291" class="s">not hydrated → spinner</text>
+  <text x="461" y="308" class="s">no token → /login · else render</text>
+  <rect x="664" y="250" width="197" height="70" rx="8" class="inner"/>
+  <text x="678" y="272" class="t">AppLayout</text>
+  <text x="678" y="291" class="s">NavBar + &lt;Outlet /&gt;</text>
+  <text x="678" y="308" class="s">guard + nav mount once</text>
+  <rect x="881" y="250" width="199" height="70" rx="8" class="inner"/>
+  <text x="895" y="272" class="t">Routes</text>
+  <text x="895" y="291" class="s">nested authed routes</text>
+  <text x="895" y="308" class="s">lazy(Progress) · SPA rewrite</text>
+
+  <!-- ===== Layer 3: View ===== -->
+  <rect x="40" y="360" width="1060" height="120" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+  <rect x="40" y="360" width="170" height="120" rx="12" fill="#2563eb"/>
+  <text x="56" y="412" class="ln">3 · View</text>
+  <text x="56" y="432" class="lf">pages/ · components/</text>
+  <rect x="230" y="380" width="270" height="80" rx="8" class="inner"/>
+  <text x="244" y="403" class="t">Pages  (containers)</text>
+  <text x="244" y="423" class="s">Dashboard · Meals · Workouts</text>
+  <text x="244" y="441" class="s">Progress · AskAI · Onboarding</text>
+  <rect x="520" y="380" width="290" height="80" rx="8" class="inner"/>
+  <text x="534" y="403" class="t">components/  (presentational)</text>
+  <text x="534" y="423" class="s">auth · layout · dashboard · meals</text>
+  <text x="534" y="441" class="s">workouts · progress  (props in, UI out)</text>
+  <rect x="830" y="380" width="250" height="80" rx="8" class="inner"/>
+  <text x="844" y="403" class="t">ui/  shared primitives</text>
+  <text x="844" y="423" class="s">Toast · Modal · ErrorBoundary</text>
+  <text x="844" y="441" class="s">Skeleton · EmptyState · ErrorNotice</text>
+
+  <!-- ===== Layer 4: State ===== -->
+  <rect x="40" y="500" width="1060" height="130" rx="12" fill="#ecfdf5" stroke="#059669" stroke-width="1.5"/>
+  <rect x="40" y="500" width="170" height="130" rx="12" fill="#059669"/>
+  <text x="56" y="557" class="ln">4 · State</text>
+  <text x="56" y="577" class="lf">split by ownership</text>
+  <rect x="230" y="520" width="380" height="90" rx="8" class="inner"/>
+  <text x="244" y="543" class="t">React Query  ·  server state</text>
+  <text x="244" y="563" class="s">meal / workout / weight logs · chat · progress</text>
+  <text x="244" y="581" class="s">queryKeys factory · staleTime 60s · retry 1</text>
+  <text x="244" y="599" class="s">writes: setQueryData  ·  invalidate(["progress"])</text>
+  <rect x="630" y="520" width="240" height="90" rx="8" class="inner"/>
+  <text x="644" y="543" class="t">Zustand  ·  session</text>
+  <text x="644" y="563" class="s">token (memory only)</text>
+  <text x="644" y="581" class="s">profile · hydrated</text>
+  <text x="644" y="599" class="s">readable outside React</text>
+  <rect x="890" y="520" width="190" height="90" rx="8" class="inner"/>
+  <text x="904" y="543" class="t">useState  ·  local UI</text>
+  <text x="904" y="563" class="s">form inputs · modals</text>
+  <text x="904" y="581" class="s">streaming flag</text>
+  <text x="904" y="599" class="s">pending chat turns</text>
+
+  <!-- ===== Layer 5: Transport ===== -->
+  <rect x="40" y="650" width="1060" height="130" rx="12" fill="#fffbeb" stroke="#d97706" stroke-width="1.5"/>
+  <rect x="40" y="650" width="170" height="130" rx="12" fill="#d97706"/>
+  <text x="56" y="707" class="ln">5 · Transport</text>
+  <text x="56" y="727" class="lf">lib/</text>
+  <rect x="230" y="670" width="380" height="90" rx="8" class="inner"/>
+  <text x="244" y="693" class="t">apiClient.ts  (Axios)  ·  all JSON calls</text>
+  <text x="244" y="713" class="s">baseURL from env · withCredentials (cookie)</text>
+  <text x="244" y="731" class="s">request interceptor: attach Bearer token</text>
+  <text x="244" y="749" class="s">response interceptor: single-flight 401 refresh</text>
+  <rect x="630" y="670" width="260" height="90" rx="8" class="inner"/>
+  <text x="644" y="693" class="t">chatStream.ts  (fetch)</text>
+  <text x="644" y="713" class="s">POST /chat → body.getReader()</text>
+  <text x="644" y="731" class="s">buffered SSE parser</text>
+  <text x="644" y="749" class="s">own one-shot 401 retry</text>
+  <rect x="910" y="670" width="170" height="90" rx="8" class="inner"/>
+  <text x="924" y="693" class="t">errors.ts</text>
+  <text x="924" y="713" class="s">{ detail } → message</text>
+  <text x="924" y="731" class="s">network-down text</text>
+
+  <!-- ===== Backend ===== -->
+  <rect x="230" y="840" width="850" height="60" rx="10" fill="#0f172a"/>
+  <text x="655" y="866" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">FastAPI backend  ·  /api/v1</text>
+  <text x="655" y="886" font-size="12.5" fill="#cbd5e1" text-anchor="middle">JSON REST + Bearer JWT  ·  SSE chat stream  ·  HttpOnly refresh cookie on /auth</text>
+
+  <!-- ===== Cross-layer arrows ===== -->
+  <line x1="365" y1="460" x2="365" y2="516" class="line" marker-end="url(#arrow)"/>
+  <text x="375" y="494" class="lbl">useQuery / useMutation</text>
+  <line x1="420" y1="610" x2="420" y2="666" class="line" marker-end="url(#arrow)"/>
+  <text x="430" y="644" class="lbl">queryFn</text>
+  <line x1="680" y1="610" x2="590" y2="666" class="line" marker-end="url(#arrow)"/>
+  <text x="690" y="644" class="lbl">getState().token</text>
+  <line x1="800" y1="610" x2="800" y2="666" class="line" marker-end="url(#arrow)"/>
+  <line x1="420" y1="760" x2="420" y2="836" class="line" marker-end="url(#arrow)"/>
+  <text x="430" y="804" class="lbl">REST (JSON)</text>
+  <line x1="720" y1="760" x2="720" y2="836" class="line" marker-end="url(#arrow)"/>
+  <text x="640" y="804" class="lbl">POST /chat</text>
+  <line x1="800" y1="836" x2="800" y2="764" class="line" marker-end="url(#arrow)"/>
+  <text x="810" y="804" class="lbl">SSE tokens</text>
+
+  <text x="40" y="940" font-size="13" fill="#475569" font-style="italic">Thin client: a hydration-aware guard on top, server state in React Query, session in Zustand,</text>
+  <text x="40" y="960" font-size="13" fill="#475569" font-style="italic">one Axios transport with single-flight refresh, and a separate fetch reader for the SSE stream.</text>
+
+  <!-- ===== Panel A: silent refresh ===== -->
+  <rect x="1120" y="110" width="440" height="430" rx="14" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="1140" y="142" class="ph">Silent token refresh</text>
+  <text x="1140" y="162" class="ps">apiClient response interceptor</text>
+
+  <rect x="1140" y="185" width="215" height="40" rx="20" fill="#fee2e2" stroke="#ef4444"/>
+  <text x="1247" y="210" class="ct">response 401</text>
+  <line x1="1247" y1="225" x2="1247" y2="241" class="line" marker-end="url(#arrow)"/>
+
+  <rect x="1140" y="245" width="215" height="40" rx="8" class="inner"/>
+  <text x="1247" y="270" class="ct">from /auth/* ?</text>
+  <line x1="1355" y1="265" x2="1396" y2="265" class="line" marker-end="url(#arrow)"/>
+  <text x="1364" y="258" class="lbl">yes</text>
+  <rect x="1400" y="245" width="140" height="40" rx="8" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text x="1470" y="270" class="ct">clear + /login</text>
+  <line x1="1247" y1="285" x2="1247" y2="301" class="line" marker-end="url(#arrow)"/>
+  <text x="1254" y="297" class="lbl">no</text>
+
+  <rect x="1140" y="305" width="215" height="40" rx="8" class="inner"/>
+  <text x="1247" y="330" class="ct">already retried?</text>
+  <line x1="1355" y1="325" x2="1396" y2="325" class="line" marker-end="url(#arrow)"/>
+  <text x="1364" y="318" class="lbl">yes</text>
+  <rect x="1400" y="305" width="140" height="40" rx="8" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text x="1470" y="330" class="ct">reject</text>
+  <line x1="1247" y1="345" x2="1247" y2="361" class="line" marker-end="url(#arrow)"/>
+  <text x="1254" y="357" class="lbl">no</text>
+
+  <rect x="1140" y="365" width="215" height="40" rx="8" class="inner"/>
+  <text x="1247" y="390" class="ct">refresh in flight?</text>
+  <line x1="1355" y1="385" x2="1396" y2="385" class="line" marker-end="url(#arrow)"/>
+  <text x="1364" y="378" class="lbl">yes</text>
+  <rect x="1400" y="365" width="140" height="40" rx="8" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text x="1470" y="390" class="ct">queue → replay</text>
+  <line x1="1247" y1="405" x2="1247" y2="421" class="line" marker-end="url(#arrow)"/>
+  <text x="1254" y="417" class="lbl">no</text>
+
+  <rect x="1140" y="425" width="400" height="56" rx="8" fill="#dcfce7" stroke="#16a34a"/>
+  <text x="1340" y="448" class="ct" font-weight="600">POST /auth/refresh once</text>
+  <text x="1340" y="468" class="ct">store token → flush queue → replay all</text>
+  <text x="1140" y="518" class="ps" font-style="italic">N expired requests at once → exactly 1 refresh call</text>
+
+  <!-- ===== Panel B: chat flow ===== -->
+  <rect x="1120" y="560" width="440" height="400" rx="14" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="1140" y="592" class="ph">Chat message flow</text>
+  <text x="1140" y="612" class="ps">AskAI page + chatStream</text>
+
+  <rect x="1140" y="630" width="400" height="40" rx="8" class="inner"/>
+  <text x="1340" y="655" class="ct">pending = [user turn, empty assistant]</text>
+  <line x1="1340" y1="670" x2="1340" y2="686" class="line" marker-end="url(#arrow)"/>
+  <rect x="1140" y="690" width="400" height="40" rx="8" class="inner"/>
+  <text x="1340" y="715" class="ct">fetch POST /chat → ReadableStream</text>
+  <line x1="1340" y1="730" x2="1340" y2="746" class="line" marker-end="url(#arrow)"/>
+  <rect x="1140" y="750" width="400" height="40" rx="8" class="inner"/>
+  <text x="1340" y="775" class="ct">decode · buffer · split on "\n\n" · parse data:</text>
+  <line x1="1340" y1="790" x2="1340" y2="806" class="line" marker-end="url(#arrow)"/>
+  <rect x="1140" y="810" width="400" height="40" rx="8" class="inner"/>
+  <text x="1340" y="835" class="ct">{ token } → append to pending[1]  (live render)</text>
+  <line x1="1340" y1="850" x2="1340" y2="866" class="line" marker-end="url(#arrow)"/>
+  <rect x="1140" y="870" width="400" height="40" rx="8" fill="#dcfce7" stroke="#16a34a"/>
+  <text x="1340" y="895" class="ct">[DONE] → invalidate chatHistory → clear pending</text>
+  <text x="1140" y="938" class="ps" font-style="italic">rendered list = serverHistory + pending (server is source of truth)</text>
+</svg>

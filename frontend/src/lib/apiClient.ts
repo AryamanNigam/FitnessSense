@@ -1,6 +1,8 @@
 import axios from "axios";
 import { useAuthStore } from "../store/authStore";
 
+type RetriableConfig = { _retry?: boolean };
+
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL as string,
   withCredentials: true,
@@ -39,7 +41,7 @@ apiClient.interceptors.response.use(
     }
 
     // Already retried this request — give up
-    if ((original as any)._retry) return Promise.reject(error);
+    if ((original as RetriableConfig)._retry) return Promise.reject(error);
 
     // Another refresh is in flight — queue this request until it resolves
     if (isRefreshing) {
@@ -51,7 +53,7 @@ apiClient.interceptors.response.use(
       });
     }
 
-    (original as any)._retry = true;
+    (original as RetriableConfig)._retry = true;
     isRefreshing = true;
 
     try {

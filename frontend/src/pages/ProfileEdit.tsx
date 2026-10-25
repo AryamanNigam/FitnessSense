@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../lib/apiClient";
 import { useAuthStore } from "../store/authStore";
+import { useToast } from "../components/ui/toastContext";
+import { errorMessage } from "../lib/errors";
 import type { ActivityLevel, Goal, Profile } from "../types";
 
 const GOALS: { value: Goal; label: string; desc: string }[] = [
@@ -20,6 +22,7 @@ const ACTIVITY_LEVELS: { value: ActivityLevel; label: string }[] = [
 
 export default function ProfileEdit() {
   const navigate = useNavigate();
+  const toast = useToast();
   const { profile, setProfile } = useAuthStore();
 
   const [name, setName] = useState(profile?.name ?? "");
@@ -48,9 +51,9 @@ export default function ProfileEdit() {
       });
       setProfile(res.data);
       setSaved(true);
+      toast.success("Profile updated");
     } catch (err: unknown) {
-      const detail = (err as any)?.response?.data?.detail;
-      setError(detail ?? "Failed to save profile. Try again.");
+      setError(errorMessage(err, "Failed to save profile. Try again."));
     } finally {
       setLoading(false);
     }
@@ -88,7 +91,7 @@ export default function ProfileEdit() {
             style={inputStyle}
           />
         </FormField>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <FormField label="Age">
             <input
               type="number"

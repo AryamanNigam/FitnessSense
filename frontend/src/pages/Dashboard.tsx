@@ -1,11 +1,15 @@
 import { Navigate, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../store/authStore";
+import { useToast } from "../components/ui/toastContext";
+import { errorMessage } from "../lib/errors";
 import DailyRing from "../components/dashboard/DailyRing";
 import WeightTracker from "../components/dashboard/WeightTracker";
 import apiClient from "../lib/apiClient";
-import { useMealLogs, useWeightLogs, useWorkoutLogs, queryKeys } from "../lib/queries";
-import type { WeightLogResponse } from "../types";
+import { useChatHistory, useMealLogs, useWeightLogs, useWorkoutLogs, queryKeys } from "../lib/queries";
+import { ErrorNotice } from "../components/ui/QueryState";
+import { FOCUS_LABELS, focusForToday } from "../lib/splits";
+import type { Focus, WeightLogResponse } from "../types";
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -15,16 +19,22 @@ export default function Dashboard() {
   const { profile } = useAuthStore();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const toast = useToast();
   const today = todayStr();
 
   // Cached queries — instant on tab switch, deduped across the app.
   const mealsQuery   = useMealLogs();
   const weightQuery  = useWeightLogs();
   const workoutQuery = useWorkoutLogs(today);
+  const chatQuery    = useChatHistory();
+  const recentChat   = (chatQuery.data ?? []).slice(-2);
+  const loadFailed   = mealsQuery.isError || weightQuery.isError || workoutQuery.isError;
 
-  const mealLogs    = mealsQuery.data ?? [];
-  const weightLogs  = weightQuery.data ?? [];
-  const workoutDone = (workoutQuery.data?.length ?? 0) > 0;
+  const mealLogs      = mealsQuery.data ?? [];
+  const weightLogs    = weightQuery.data ?? [];
+  // useWorkoutLogs(today) is already date-scoped, so these are today's workouts.
+  const todaysWorkouts = workoutQuery.data ?? [];
+  const workoutDone    = todaysWorkouts.length > 0;
   // weightDone is derived from the full weight log — no separate request needed.
   const weightDone  = weightLogs.some((l) => l.logged_at.slice(0, 10) === today);
 
@@ -41,7 +51,10 @@ export default function Dashboard() {
       queryClient.setQueryData<WeightLogResponse[]>(queryKeys.weightLogs(), (prev) =>
         prev ? [newLog, ...prev] : [newLog]
       );
+      queryClient.invalidateQueries({ queryKey: ["progress"] });
+      toast.success("Weight logged");
     },
+    onError: (err) => toast.error(errorMessage(err, "Failed to log weight")),
   });
 
   async function handleWeightLog(kg: number) {
@@ -52,6 +65,12 @@ export default function Dashboard() {
 
   const todaysMeals = mealLogs.filter((l) => l.logged_at.slice(0, 10) === today);
   const mealDone    = todaysMeals.length > 0;
+
+  // Today's scheduled focus (only when a split is set). Drives the workout card chip.
+  const todayFocus: Focus | null = profile.workout_split
+    ? focusForToday(profile.workout_split.schedule)
+    : null;
+  const isRestDay = todayFocus === "rest";
 
   const greeting     = getGreeting();
   const todayLabel   = new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -66,23 +85,34 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {/* Greeting */}
-      <div className="flex items-start justify-between gap-6">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 sm:gap-6">
         <div>
           <h1 className="text-3xl font-bold" style={{ color: "var(--text-primary)" }}>{greeting}</h1>
           <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
             {goalLabel} · {activityLabel} · {profile.tdee.toLocaleString()} kcal target · {profile.protein_target_g}g protein
           </p>
         </div>
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex flex-wrap items-center gap-3 sm:shrink-0">
           <div className="px-4 py-2 rounded-xl text-sm" style={{ border: "0.5px solid var(--border)", color: "var(--text-secondary)" }}>{todayLabel}</div>
-          <button className="px-4 py-2 rounded-xl text-sm transition-opacity hover:opacity-80" style={{ background: "var(--surface-1)", color: "var(--text-primary)" }}>
+          <button onClick={() => navigate("/meals")} className="px-4 py-2 rounded-xl text-sm transition-opacity hover:opacity-80" style={{ background: "var(--surface-1)", color: "var(--text-primary)" }}>
             Generate today's plan
           </button>
         </div>
       </div>
 
+      {loadFailed && (
+        <ErrorNotice
+          message="Some of your data didn't load."
+          onRetry={() => {
+            mealsQuery.refetch();
+            weightQuery.refetch();
+            workoutQuery.refetch();
+          }}
+        />
+      )}
+
       {/* Row 1 — ring + weight tracker */}
-      <div className="grid grid-cols-2 gap-4 items-start">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
         <div className="rounded-2xl overflow-hidden" style={{ background: "var(--surface-1)" }}>
           <DailyRing
             mealDone={mealDone}
@@ -96,10 +126,10 @@ export default function Dashboard() {
       </div>
 
       {/* Row 2 — meal/workout (left) + stats/AI (right) */}
-      <div className="grid grid-cols-5 gap-4 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start">
 
         {/* Left — meal plan + workout */}
-        <div className="col-span-3 space-y-4">
+        <div className="lg:col-span-3 space-y-4">
           {/* Today's meal plan */}
           <div className="rounded-2xl p-5" style={{ background: "var(--surface-1)" }}>
             <div className="flex items-center justify-between mb-4">
@@ -138,19 +168,55 @@ export default function Dashboard() {
           {/* Today's workout */}
           <div className="rounded-2xl p-5" style={{ background: "var(--surface-1)" }}>
             <div className="flex items-center justify-between mb-4">
-              <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Today's workout</p>
-              <button className="text-xs transition-opacity hover:opacity-70" style={{ color: "var(--accent)" }}>Regenerate</button>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Today's workout</p>
+                {todayFocus && (
+                  <span
+                    className="text-xs px-2 py-0.5 rounded-full"
+                    style={{ background: "var(--surface-2)", color: "var(--text-muted)" }}
+                  >
+                    {FOCUS_LABELS[todayFocus]} day
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => navigate("/workouts")}
+                className="text-xs transition-opacity hover:opacity-70"
+                style={{ color: "var(--accent)" }}
+              >
+                Go to Workouts
+              </button>
             </div>
-            <div style={{ borderTop: "0.5px solid var(--border)" }} className="pt-3">
+            {todaysWorkouts.length > 0 ? (
+              <div>
+                {todaysWorkouts.flatMap((workout) => workout.plan).map((ex, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between gap-4 py-2"
+                    style={i > 0 ? { borderTop: "0.5px solid var(--border)" } : undefined}
+                  >
+                    <p className="text-sm" style={{ color: "var(--text-primary)" }}>{ex.exercise}</p>
+                    <p className="text-xs shrink-0" style={{ color: "var(--text-secondary)" }}>
+                      {ex.sets} × {ex.reps}
+                      <span style={{ color: "var(--text-muted)" }}> · {ex.rest_s}s</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : isRestDay ? (
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                Generate a plan to see today's workout.
+                Rest day on your schedule — recover well.
               </p>
-            </div>
+            ) : (
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                No workout logged yet today — head to Workouts to generate and log one.
+              </p>
+            )}
           </div>
         </div>
 
         {/* Right — daily target + protein/weight + Ask AI */}
-        <div className="col-span-2 space-y-4">
+        <div className="lg:col-span-2 space-y-4">
           {/* Daily target — hero */}
           <div className="rounded-2xl p-5" style={{ background: "var(--surface-1)" }}>
             <p className="label mb-3">Daily target</p>
@@ -198,19 +264,38 @@ export default function Dashboard() {
               </button>
             </div>
             <div className="space-y-2 mb-3">
-              {/* placeholder AI exchange */}
-              <div className="flex justify-end">
-                <div className="text-xs px-3 py-2 rounded-[10px_10px_0_10px] max-w-[80%]" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
-                  Ask me anything about your nutrition or workouts…
+              {recentChat.length === 0 ? (
+                <div className="flex justify-end">
+                  <div className="text-xs px-3 py-2 rounded-[10px_10px_0_10px] max-w-[80%]" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
+                    Ask me anything about your nutrition or workouts…
+                  </div>
                 </div>
-              </div>
+              ) : (
+                recentChat.map((m) => (
+                  <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                    <div
+                      className={`text-xs px-3 py-2 max-w-[85%] line-clamp-3 ${m.role === "user" ? "rounded-[10px_10px_0_10px]" : "rounded-[10px_10px_10px_0]"}`}
+                      style={{
+                        background: m.role === "user" ? "var(--surface-2)" : "var(--ai-bubble-bg)",
+                        color: m.role === "user" ? "var(--text-secondary)" : "var(--ai-bubble-text)",
+                      }}
+                    >
+                      {m.content}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
             <input
               type="text"
               placeholder="Ask anything about nutrition…"
               className="w-full text-xs px-3 py-2 rounded-xl focus:outline-none"
               style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "0.5px solid var(--border)" }}
-              onKeyDown={(e) => e.key === "Enter" && navigate("/ask-ai")}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter") return;
+                const question = e.currentTarget.value.trim();
+                navigate("/ask-ai", { state: question ? { question } : undefined });
+              }}
             />
           </div>
         </div>
