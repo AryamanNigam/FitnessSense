@@ -7,29 +7,33 @@ from app.config import settings
 # Reliability-first ordering: lead with the healthy/fast model, keep the original
 # as fallback. gemini-3.5-flash was demoted from primary — it's been returning 503
 # "high demand" and takes ~5s+ just to fail, taxing every request before fallback ran.
-_MODELS = ["gemini-3.1-flash-lite", "gemini-3.5-flash"]
+# gemini-3.5-flash-lite leads: it answers in ~1s while the others intermittently return 503s.
+_MODELS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.5-flash"]
+# gemini-3.5-flash-lite rejects thinkingBudget and takes a thinkingLevel instead.
+_THINKING = {"gemini-3.5-flash-lite": {"thinkingLevel": "minimal"}}
+_NO_THINKING = {"thinkingBudget": 0}
 _URL_TEMPLATE = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 
-def generate_json(prompt: str) -> dict:
-    """Call Gemini with structured JSON output, falling back to a second
-    model if the primary one is overloaded (429/503) or unreachable."""
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "responseMimeType": "application/json",
-            "thinkingConfig": {"thinkingBudget": 0},
-        },
-    }
+def _generation_config(model: str, **extra) -> dict:
+    return {**extra, "thinkingConfig": _THINKING.get(model, _NO_THINKING)}
 
+
+def generate_json(prompt: str, timeout: float = 45.0) -> dict:
+    """Call Gemini with structured JSON output, falling back to the next
+    model if one is overloaded (429/503) or unreachable."""
     last_exc: Exception | None = None
     for model in _MODELS:
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": _generation_config(model, responseMimeType="application/json"),
+        }
         try:
             resp = httpx.post(
                 _URL_TEMPLATE.format(model=model),
                 params={"key": settings.gemini_api_key},
                 json=payload,
-                timeout=45.0,
+                timeout=timeout,
             )
             resp.raise_for_status()
             body = resp.json()
@@ -62,14 +66,13 @@ _STREAM_URL_TEMPLATE = (
 
 
 def stream_text(prompt: str, system: str | None = None) -> Iterator[str]:
-    payload: dict = {
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-        "generationConfig": {"thinkingConfig": {"thinkingBudget": 0}},
-    }
-    if system:
-        payload["systemInstruction"] = {"parts": [{"text": system}]}
-
     for model in _MODELS:
+        payload: dict = {
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": _generation_config(model),
+        }
+        if system:
+            payload["systemInstruction"] = {"parts": [{"text": system}]}
         started = False
         try:
             with httpx.stream(

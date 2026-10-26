@@ -4,16 +4,13 @@ services:
     runtime: docker
     dockerContext: backend
     dockerfilePath: backend/Dockerfile
+    plan: free
     healthCheckPath: /api/v1/health
-    disk:
-      name: chroma
-      mountPath: /data
-      sizeGB: 1
     envVars:
       - key: ENVIRONMENT
         value: production
       - key: CHROMA_PERSIST_DIR
-        value: /data/chroma_db
+        value: /app/chroma_db
       - key: CORS_ORIGINS
         sync: false
       - key: SUPABASE_URL

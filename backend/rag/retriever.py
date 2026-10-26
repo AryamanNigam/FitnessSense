@@ -4,14 +4,17 @@ import re
 from rank_bm25 import BM25Okapi
 
 from rag.constraints import Constraints, matches, to_where
-from rag.embeddings import embed_query
+from rag.embeddings import embed_queries
 from rag.store import get_collection
 
 logger = logging.getLogger("fitnesssense")
 
-TOP_K = 5
+TOP_K = 8  # room for a dish that combines protein and fiber sources
 CANDIDATES = 20  # per retriever, before fusion
 RRF_K = 60  # standard reciprocal-rank-fusion constant; damps the gap between rank 1 and 2
+# Cosine distance cutoff for gemini-embedding-001, from sample queries: food and constraint
+# questions land at 0.26-0.37, off-topic ones (training, sleep, trivia) at 0.42+.
+MAX_VECTOR_DISTANCE = 0.40
 
 _bm25: tuple[BM25Okapi, list[str], list[str], list[dict]] | None = None
 
@@ -39,11 +42,19 @@ def _keyword_search(query: str, c: Constraints, n: int) -> list[tuple[str, str, 
     return hits[:n]
 
 
-def _vector_search(query: str, c: Constraints, n: int) -> list[tuple[str, str, dict]]:
+def _vector_search(queries: list[str], c: Constraints, n: int) -> list[list[tuple[str, str, dict]]]:
+    """One ranking per query, from a single batched embedding call and a single Chroma query."""
     result = get_collection().query(
-        query_embeddings=[embed_query(query)], n_results=n, where=to_where(c)
+        query_embeddings=embed_queries(queries),
+        n_results=n,
+        where=to_where(c),
+        include=["documents", "metadatas", "distances"],
     )
-    return list(zip(result["ids"][0], result["documents"][0], result["metadatas"][0]))
+    rankings = []
+    for ids, docs, metas, dists in zip(result["ids"], result["documents"], result["metadatas"], result["distances"]):
+        hits = zip(ids, docs, metas, dists)
+        rankings.append([(doc_id, doc, meta) for doc_id, doc, meta, dist in hits if dist <= MAX_VECTOR_DISTANCE])
+    return rankings
 
 
 def fuse(rankings: list[list[tuple[str, str, dict]]], k: int) -> list[tuple[str, dict]]:
@@ -59,17 +70,51 @@ def fuse(rankings: list[list[tuple[str, str, dict]]], k: int) -> list[tuple[str,
     return [hits[doc_id] for doc_id in best]
 
 
-def retrieve(query: str, constraints: Constraints | None = None, k: int = TOP_K) -> list[tuple[str, dict]]:
+def _interleave(results: list[list[tuple[str, dict]]], k: int) -> list[tuple[str, dict]]:
+    """Round-robin across queries so every requested food gets a slot before any gets a second."""
+    picked: list[tuple[str, dict]] = []
+    seen: set[str] = set()
+    for rank in range(max((len(r) for r in results), default=0)):
+        for result in results:
+            if rank < len(result) and result[rank][0] not in seen:
+                seen.add(result[rank][0])
+                picked.append(result[rank])
+                if len(picked) == k:
+                    return picked
+    return picked
+
+
+def retrieve(
+    query: str | list[str], constraints: Constraints | None = None, k: int = TOP_K
+) -> list[tuple[str, dict]]:
+    """Several queries (one per food from the rewritten question) are searched separately:
+    one blended embedding of "cheddar, lentils, chicken breast" lands among the cheeses."""
+    queries = [query] if isinstance(query, str) else query
     c = constraints or Constraints()
-    rankings = []
     # Each retriever fails independently, and failures are logged rather than swallowed,
     # so an ungrounded answer is visible in the logs instead of looking normal.
-    for search in (_vector_search, _keyword_search):
+    vector: list[list[tuple[str, str, dict]]] | None = None
+    try:
+        vector = _vector_search(queries, c, CANDIDATES)
+    except Exception:
+        logger.exception("Vector search failed for %r", queries)
+
+    results = []
+    for i, q in enumerate(queries):
+        rankings = []
+        if vector is not None:
+            # Vector search is the relevance gate: BM25 matches "protein" in every chunk, so it
+            # can't tell an off-topic query apart. Empty context lets the prompt say so.
+            if not vector[i]:
+                logger.info("No chunk within distance %.2f for query %r", MAX_VECTOR_DISTANCE, q)
+                continue
+            rankings.append(vector[i])
         try:
-            rankings.append(search(query, c, CANDIDATES))
+            rankings.append(_keyword_search(q, c, CANDIDATES))
         except Exception:
-            logger.exception("%s failed for query %r", search.__name__, query)
-    return fuse(rankings, k)
+            logger.exception("Keyword search failed for query %r", q)
+        results.append(fuse(rankings, k))
+    return _interleave(results, k)
 
 
 def collection_status() -> str:

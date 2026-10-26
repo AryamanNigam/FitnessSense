@@ -15,7 +15,7 @@ test:
 	cd frontend && npx tsc -b && npm run lint
 
 ingest:
-	cd backend && .venv/bin/python -m rag.ingest data/usda.json --reset
+	cd backend && .venv/bin/python -m rag.ingest data/usda.json --reset --core
 
 seed:
 	cd backend && .venv/bin/python scripts/seed_demo.py

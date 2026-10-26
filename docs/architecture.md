@@ -17,7 +17,7 @@ FastAPI Backend (Python)
    └── ── all DB access scoped to user_id ──► Supabase (Postgres)
 
 ChromaDB collection is built offline (rag/ingest.py) and
-loaded from a persistent disk at startup — never re-ingested on boot.
+shipped inside the Docker image — never re-ingested on boot.
 ```
 
 The backend mediates all data access (rather than the frontend hitting Supabase directly) for three concrete reasons: it keeps the `GEMINI_API_KEY` and Supabase service key server-side, it centralizes business logic (TDEE/macro computation, plan generation), and it hosts the RAG pipeline that the client can't run.
@@ -84,7 +84,7 @@ FitnessSense/
 │   │   ├── ingest.py             # Offline: load + chunk USDA subset → ChromaDB
 │   │   ├── retriever.py          # ChromaDB query wrapper
 │   │   └── chain.py              # LCEL RAG chain with Gemini (streaming)
-│   ├── chroma_db/                # Persisted ChromaDB store (on Render disk; gitignored)
+│   ├── chroma_db/                # Persisted ChromaDB store (committed; copied into the image)
 │   ├── data/
 │   │   └── usda_foods.json       # Curated USDA FoodData Central subset (gitignored)
 │   ├── tests/
@@ -270,7 +270,7 @@ User question
 LangChain retriever  ── embeds query, similarity search (top-k=5)
       │
       ▼
-ChromaDB (USDA food embeddings, loaded from persisted disk)
+ChromaDB (USDA food embeddings, baked into the image)
       │  retrieved chunks
       ▼
 LCEL chain
@@ -291,7 +291,7 @@ Streamed (SSE) answer → frontend
 2. Parse each food into a text chunk: `"Food: {description}. Nutrients per 100g: protein {x}g, carbs {y}g, fat {z}g, kcal {k}."`
 3. Embed with `GoogleGenerativeAIEmbeddings` and persist to `CHROMA_PERSIST_DIR`.
 
-**Startup:** the API opens the **already-persisted** Chroma collection from disk. It does **not** re-ingest on boot. On Render, `CHROMA_PERSIST_DIR` points at a mounted persistent disk so the index survives restarts and redeploys. (Without a persistent disk, Render's filesystem is ephemeral and the index would be lost on every deploy — hence the disk.)
+**Startup:** the API opens the **already-persisted** Chroma collection from disk. It does **not** re-ingest on boot. The USDA corpus is static, so the index is built locally, committed, and copied into the Docker image; every deploy ships the same index with no persistent disk. (Render's filesystem is ephemeral, and persistent disks need a paid instance and pin the service to one instance.) Updating the corpus means re-running ingest and redeploying.
 
 **Per request:** `rag/retriever.py` embeds the query and returns the top-5 closest USDA chunks; `rag/chain.py` composes an LCEL chain (`prompt | llm | output_parser`) that injects the retrieved context plus the user's goal and TDEE, then streams Gemini's response back over SSE. The user/assistant turns are appended to `chat_history`.
 
@@ -350,8 +350,8 @@ chest/shoulders/arms → map to themselves  full_body → all major groups
 
 ## Operational Notes
 
-- **Deployment:** frontend on Vercel, backend on Render with a mounted persistent disk for `chroma_db/`.
-- **Cold starts:** on Render's free tier the service sleeps; the first request after idle is slow. The Chroma collection loads from disk (seconds), not via re-ingestion (minutes + API cost).
+- **Deployment:** frontend on Vercel, backend on Render (free tier) with the Chroma index baked into the image.
+- **Cold starts:** on Render's free tier the service sleeps; the first request after idle is slow. The Chroma collection loads from the image (seconds), not via re-ingestion (minutes + API cost).
 - **External-call resilience:** Gemini calls in `/meals/generate`, `/workouts/generate`, and `/chat` are wrapped with a timeout and a graceful error response, so an upstream failure returns a clean `503`-style message rather than a hanging request.
 - **Rate limiting:** the three generate/chat routes are rate-limited per user to bound Gemini spend.
 - **Testing:** `backend/tests/` covers JWT verification, user-scoping on a representative router, and the retriever returning the expected top-k shape.

@@ -22,7 +22,10 @@ def _embed_batch(texts: list[str], task_type: str) -> list[list[float]]:
     }
     for attempt in range(5):
         resp = httpx.post(_URL, params={"key": settings.gemini_api_key}, json=payload, timeout=60.0)
-        if resp.status_code in (429, 503):
+        if resp.status_code == 429:
+            time.sleep(60)  # free tier: 100 embeddings/minute, so wait out the window
+            continue
+        if resp.status_code == 503:
             time.sleep(2 ** attempt)
             continue
         resp.raise_for_status()
@@ -37,5 +40,5 @@ def embed_documents(texts: list[str]) -> list[list[float]]:
     return vectors
 
 
-def embed_query(text: str) -> list[float]:
-    return _embed_batch([text], "RETRIEVAL_QUERY")[0]
+def embed_queries(texts: list[str]) -> list[list[float]]:
+    return _embed_batch(texts, "RETRIEVAL_QUERY")
